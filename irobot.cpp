@@ -174,7 +174,7 @@ void Graph::Travel(){
     }   
 
     //cout<<"all path:"<<endl;
-   // Print1D(allPath);
+    //Print1D(allPath);
 }
 
 
@@ -286,7 +286,7 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                         if (!visited[nexti]){
                             int gohomepow=currPower-1;
                            // cout<<"gp:"<<gohomepow<<endl;
-                            if (gohomepow >=singleSourceDist[nexti])
+                            if (gohomepow >=singleSourceDist[nexti] && nexti!=bat_node)
                             {
                                // cout<<"findway"<<endl;
                                 start=nexti;
@@ -467,8 +467,8 @@ move[RIGHT].vertical=0;
     step start;
     int openPathCount=0;
 
-    int temp=0;
-    bool findbattery=false;
+ 
+ 
     char buf;
     char key= 'R';
     for (int i=1; i<matrixRowCount-1; i++){
@@ -584,8 +584,8 @@ move[RIGHT].vertical=0;
         cout<<endl;
     }    
 
-*/
 
+*/
 
 
     
