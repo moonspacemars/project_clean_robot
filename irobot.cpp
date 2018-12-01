@@ -7,11 +7,179 @@
 #include<exception>
 
 
+
 using namespace std;
 const int room_map_INIT=1;
 const int BAT_SITE=2;
 const int max_weight=2000000;
 const int init=105;
+const int limit_node_count=1000;
+
+/**
+ * Element stored within the Binary Heap.
+ */
+typedef struct elt {
+
+  /** user-defined information to be stored by id */
+  int     id;            
+
+  /** Key which represents the priority. */
+  int     priority;
+} ELEMENT, *ELEMENT_PTR;
+
+
+class BinaryHeap {
+
+ public:
+  BinaryHeap (int);
+  ~BinaryHeap ();
+
+  bool isEmpty() { return (_n == 0); }
+  int smallest();
+  void insert (int, int); 
+  void decreaseKey (int, int);
+
+ private:
+  int          _n;           // number of elements in binary heap
+  ELEMENT_PTR  _elements;    // values in the heap
+  int          *_pos;        // pos[i] is index into elements for ith value    
+
+  long         _numComparisons;
+  long         _numInsert;
+  long         _numSwaps;
+  long         _numSmallest;
+  long         _numDecrease;
+
+};
+
+/** allocate heap of n elements */
+BinaryHeap::BinaryHeap (int i) {
+  _n = 0;  // initially none in the heap
+
+  // simplify algorithm to consider position 1 as being the 'root'
+  _elements = (ELEMENT *) calloc (i+1, sizeof (ELEMENT));
+  _pos      = (int *) calloc (i+1, sizeof (int));
+}
+
+/** Destructor frees all internal storage. */
+BinaryHeap::~BinaryHeap () {
+  free (_elements);
+  free (_pos);
+  _n = -1;
+}
+
+
+/**
+ * Return the vertex identifier of the smallest vertex in heap and 
+ * readjust the heap.
+ */
+int BinaryHeap::smallest () {
+  int id = _elements[1].id;
+  int pIdx;
+
+  //INC_SMALL;
+
+  // heap will have one less entry, and we want to place leftover one
+  // in proper location.
+  ELEMENT last = _elements[_n];
+  _n--;
+
+  _elements[1] = last;
+
+  pIdx = 1;
+  int child = pIdx*2;
+  while (child <= _n) {
+    // select smaller of two children
+    ELEMENT sm = _elements[child];
+    if (child < _n) {
+      //INC_COMP;
+      if (sm.priority >  _elements[child+1].priority) {
+	sm = _elements[++child];
+      }
+    }
+
+    // are we in the right spot? Leave now
+    //INC_COMP;
+    if (last.priority <= sm.priority) { break; }
+
+    // otherwise, swap and move up
+    //INC_SWAP;
+    _elements[pIdx] = sm;
+    _pos[sm.id] = pIdx;
+
+    pIdx = child;
+    child = 2*pIdx;
+  }
+
+  // insert into spot vacated by moved element (or last one)
+  _elements[pIdx] = last;
+  _pos[last.id] = pIdx;
+  return id;
+}
+
+
+/**
+ * Insert the given value into the tree with priority. Ties are broken
+ * in favor of insert.
+ * \param id        id of information to be stored
+ * \param priority  priority to associate with this id.
+ */
+void BinaryHeap::insert (int id, int priority) {
+  int i;
+
+  //INC_INSERT;
+
+  // add to end of the heap. If 1 then the first element.
+  i = ++_n;
+  while (i > 1) {
+    int       pIdx = i/2;
+    ELEMENT   p    = _elements[pIdx];
+
+    // are we in the right spot? Leave now
+    //INC_COMP;
+    if (priority > p.priority) { break; }
+
+    // otherwise, swap and move up
+    //INC_SWAP;
+    _elements[i] = p;
+    _pos[p.id] = i;
+    i = pIdx;
+  }
+
+  // insert into spot vacated by moved element (or last one)
+  _elements[i].id = id;
+  _elements[i].priority = priority;
+  _pos[id] = i;
+}
+
+
+/**
+ * Find the vertex with identifier [id] and reduce its priority to the
+ * given value. It is the responsibility of the caller to ensure that
+ * this function is only invoked when newPriority is indeed smaller than
+ * the existing priority associated with the id.
+ * \param  id            information to have priority reduced.
+ * \param  newPriority   priority which must be smaller than existing priority.
+ */
+void BinaryHeap::decreaseKey (int id, int newPriority) {
+  int size = _n;
+
+  //INC_DECREASE;
+
+  // truncate heap (temporarily) and act like the binary heap up to
+  // but not including this one is all that exists (cute, huh?) 
+  _n = _pos[id] - 1;
+
+  // now we insert and the binary heap is shuffled appropriately
+  insert(id, newPriority);
+
+  // since the newPriority must be lower, we can expand back and 
+  // we still have a working binary heap
+  _n = size;
+}
+
+
+
 
 enum direction {UP,DOWN,LEFT,RIGHT};
 
@@ -36,22 +204,30 @@ struct offset{
 class Graph{
 private:
     int total_vertex;
-    int total_edge;
-    int bat,currPower=0,bat_node;
-    vector<vector<int>> adjGroup;
-    vector<int> Tdist,Tpred;
+    int trymode=0;
+    //int total_edge;
+    int bat,currPower=0,bat_node, up_node=-1,down_node=-1,right_node=-1,left_node=-1;
+    vector<vector<int> > adjGroup;
+
 
     bool *visited;
-    void singlePathForTravel(int source);
+    void singlePathForTravel(int source, vector<int> &Adist, vector<int> &APred);
    
 public:
+    vector<int> Udist,Upred, Rdist, Rpred, Ldist, Lpred, Ddist, Dpred;
     vector< int > singleSourceDist,singlePred,allPath;
     Graph(int n,int b):total_vertex(n),bat(b){
-        total_edge=0;
+        //total_edge=0;
         adjGroup.resize(total_vertex);
         currPower=bat;
-        Tdist.resize(total_vertex);
-        Tpred.resize(total_vertex);
+        Udist.resize(total_vertex);
+        Upred.resize(total_vertex);
+        Ddist.resize(total_vertex);
+        Dpred.resize(total_vertex);   
+        Rdist.resize(total_vertex);
+        Rpred.resize(total_vertex);
+        Ldist.resize(total_vertex);
+        Lpred.resize(total_vertex);               
         //adjmatrix.resize(total_vertex);
         
         singlePred.resize(total_vertex);
@@ -62,6 +238,17 @@ public:
          
             singleSourceDist[i]=max_weight;
             singlePred[i]=-1;
+
+            Udist[i]=max_weight;
+            Upred[i]=-1;
+            Ddist[i]=max_weight;
+            Dpred[i]=-1;   
+            Rdist[i]=max_weight;
+            Rpred[i]=-1;
+            Ldist[i]=max_weight;
+            Lpred[i]=-1;
+
+
         }
         /*for (int i=0; i<total_vertex;i++)
 				for(int j=0;j<total_vertex; j++)
@@ -72,11 +259,11 @@ public:
     }
     void AddEdge(int start, int end, int weight);
  
-    void SingleMinPath(int source);
+    void SingleMinPath(int source, int Ubat, int Dbat, int Lbat, int Rbat);
 
     
     
-    void Print1D(vector<int> a);
+    void Print1D(vector<int> &a);
 
     void DFS(int v);
 
@@ -88,100 +275,159 @@ public:
 
     void TravelInit();
 
-    bool TravelOrder(vector<int> sortNodes);
+    bool TravelOrder(vector<int> &sortNodes);
+
+    void InitBatAroundNode();
 };
 
 bool NodeCompare(node n1, node n2){
-    return (n1.dist > n2.dist);
+    return (n1.dist >= n2.dist);
+}
+
+bool NodeCompareLess(node n1, node n2){
+    return (n1.dist <= n2.dist);
 }
 
 bool StepSeqCompare(step s1, step s2){
     return (s1.sequence < s2.sequence);
 }
 
-void Graph::singlePathForTravel(int source){
-   
-    Tdist[source]=0;
-    bool leaveEarly=true;
+void Graph::singlePathForTravel(int source, vector<int> &Adist, vector<int> &APred){
+    Adist[source]=0;
+    BinaryHeap pq(total_vertex);
+
+    for (int u=0; u< total_vertex; u++){
+        pq.insert(u, Adist[u]);
+    }
     int newLen=0;
-    int adjNode=0;
-    for (int k=0;k<total_vertex; k++){
-        leaveEarly=true;
-        for(int i=0;i<total_vertex;i++){
-            for (int j=0;j<adjGroup[i].size();j++){
-                adjNode=adjGroup[i][j];
-                newLen=Tdist[i]+1;//adjmatrix[i][adjNode];
-                if (newLen<Tdist[adjNode]){
-                    Tdist[adjNode]=newLen;
-                    Tpred[adjNode]=i;
-                    leaveEarly=false;
-                }
+    int adjNode=0;   
+    int smallNode=0;
+    while(!pq.isEmpty()){
+        smallNode=pq.smallest();
+       /* if (total_vertex>limit_node_count){
+            if (smallNode==bat_node){
+                continue;
+            }
+        }*/
+        if (trymode==1 || trymode==3){
+            if (smallNode==bat_node){
+                continue;
             }
         }
-        if (leaveEarly){
-            break;
-        }
 
-
-
-    }
-    
+        for (int j=0;j<adjGroup[smallNode].size();j++){
+            adjNode=adjGroup[smallNode][j];
+            newLen=Adist[smallNode]+1;//adjmatrix[i][adjNode];
+            if (newLen<Adist[adjNode]){
+                pq.decreaseKey(adjNode, newLen);
+                Adist[adjNode]=newLen;
+                APred[adjNode]=smallNode;                
+            }
+        }        
+    }    
 }
 
 void Graph::Travel(){
 
     node tmpnode;
     vector<node> nodeGroup;
-    for (int i=0;i<total_vertex;i++){
-        tmpnode.vert=i;
-        tmpnode.dist=singleSourceDist[i];
-        nodeGroup.push_back(tmpnode);
-    }
-
     vector<int> sortedNode;
 
-    sort(nodeGroup.begin(), nodeGroup.end(), NodeCompare);
+    for (int trysort=0; trysort<2; trysort++){
 
-    for(int i=0; i<nodeGroup.size();i++){
-        sortedNode.push_back(nodeGroup[i].vert);
-    }    
+        vector<node>().swap(nodeGroup);
+        for (int i=0;i<total_vertex;i++){
+            tmpnode.vert=i;
+            tmpnode.dist=singleSourceDist[i];
+            nodeGroup.emplace_back(tmpnode);
+        }
 
-    vector<int> tmpDist;
-    tmpDist=sortedNode;
+        vector<int>().swap(sortedNode);
+
     
-    bool finished=false;
-    int orderidx=0;
-    for(int i=0; i<total_vertex; i++){
-        finished=TravelOrder(tmpDist);
-        if (finished==false){
-            orderidx++;
-            int newidx=0;
-            if (i==total_vertex-1)
-                break;
-            for(int k=0;k<total_vertex;k++){
-                newidx=k-orderidx;
-                if(newidx<0){
-                    newidx=newidx+total_vertex;
-                }
-                tmpDist[k]=sortedNode[newidx];
-            }
-        }
-        else
-        {
-           // cout<<"done !"<<endl;
-            break;
-        }
-    }   
+        if (total_vertex>limit_node_count){
+            sort(nodeGroup.begin(), nodeGroup.end(), NodeCompareLess); 
+            trymode=1;   
 
-    //cout<<"all path:"<<endl;
-    //Print1D(allPath);
+        }
+        else{
+            if (trysort==0)
+            {
+                sort(nodeGroup.begin(), nodeGroup.end(), NodeCompare);
+                trymode=2;
+            }
+            else{
+                sort(nodeGroup.begin(), nodeGroup.end(), NodeCompare);
+                trymode=3;               
+
+            }
+
+
+        }
+        InitBatAroundNode();
+        if (up_node!=-1)
+            singlePathForTravel(up_node,Udist, Upred);
+        if (right_node!=-1)
+            singlePathForTravel(right_node,Rdist, Rpred);
+        if (down_node!=-1)
+            singlePathForTravel(down_node,Ddist, Dpred);
+        if (left_node!=-1)    
+            singlePathForTravel(left_node,Ldist, Lpred);
+
+
+
+    /*
+        if (total_vertex<limit_node_count && trysort==0)
+            sort(nodeGroup.begin(), nodeGroup.end(), NodeCompare);
+        else        
+            sort(nodeGroup.begin(), nodeGroup.end(), NodeCompareLess);*/
+
+        
+        
+        
+        for(int i=0; i<nodeGroup.size();i++){
+            sortedNode.emplace_back(nodeGroup[i].vert);
+        }   
+
+        vector<int> tmpDist;
+        tmpDist=sortedNode;
+        
+        bool finished=false;
+        int orderidx=0;
+        for(int i=0; i<total_vertex; i++){
+            finished=TravelOrder(tmpDist);
+            if (finished==false){
+                orderidx++;
+                int newidx=0;
+                if (i==total_vertex-1)
+                    break;
+                for(int k=0;k<total_vertex;k++){
+                    newidx=k-orderidx;
+                    if(newidx<0){
+                        newidx=newidx+total_vertex;
+                    }
+                    tmpDist[k]=sortedNode[newidx];
+                }
+            }
+            else
+            {
+                //cout<<"done !"<<endl;
+                //cout<<"all path:"<<endl;
+                //Print1D(allPath);                
+                return;
+            }
+        }   
+    }
+
 }
 
 
 
-bool Graph::TravelOrder(vector<int> sortNodes){
+bool Graph::TravelOrder(vector<int> &sortNodes){
     TravelInit();
     stack<int> tempPath;
+
+    vector<int> Tdist, Tpred;
     int checknode;
     bool wrongpath;
     int j;
@@ -195,30 +441,75 @@ bool Graph::TravelOrder(vector<int> sortNodes){
         j=sortNodes[temp_i];
             if (!visited[j] && j!=bat_node){
                 stack<int>().swap(tempPath);
+
+
                 tempPath.push(j);
                 wrongpath=false;
 
-                if (allPath.size()>1){
+               if (allPath.size()>1){
                      
                     int source=allPath[allPath.size()-2];
+                    if (source==up_node){
+                        Tpred=Upred;
+                        Tdist=Udist;
+                    }
+                    else if(source==down_node){
+                        Tpred=Dpred;
+                        Tdist=Ddist;                       
+                    }
+                    else if(source==left_node){
+                        Tpred=Lpred;
+                        Tdist=Ldist;
+                    }
+                    else if(source==right_node){
+                        Tpred=Rpred;
+                        Tdist=Rdist;
+                    }
+                    else{
+                        wrongpath=true;
+                        continue;
 
-                    for(int ini_idx=0; ini_idx<total_vertex;ini_idx++){
+                    }
+                    //cout<<"1.befor init "<<j<<endl;
+                  /*  for(int ini_idx=0; ini_idx<total_vertex;ini_idx++){
                         Tpred[ini_idx]=-1;
                         Tdist[ini_idx]=max_weight;
+                    }*/
+                    
+                   
+                   //cout<<"2.after init"<<endl;
+                    //singlePathForTravel(source);
+                    //cout<<"3.after single path"<<endl;
+
+                    //if (Tdist[j]<=singleSourceDist[j]){
+
+                    bool pathCheck=false;
+
+                    if (trymode==1 || trymode==3)
+                        pathCheck=(Tdist[j]+singleSourceDist[j]+1<=bat);   
+                    else
+                        pathCheck=(Tdist[j]<=singleSourceDist[j]);
+                    /*if (total_vertex>limit_node_count){
+                        pathCheck=(Tdist[j]+singleSourceDist[j]+1<=bat);
                     }
-                   
-                   
-                    singlePathForTravel(source);
-
-
-                    if (Tdist[j]<=singleSourceDist[j]){
+                    else{
+                        pathCheck=(Tdist[j]<=singleSourceDist[j]);
+                    }
+*/
+                    if(pathCheck){
                         int pred3=Tpred[j];
                         if (pred3==-1)
                             tempPath.push(pred3);
                         else
                         while (pred3!=-1){                            
                             tempPath.push(pred3);
+                            /*
+                            if (pred3==bat_node){
+                                wrongpath=true;
+                                break;
+                            }*/
                             pred3=Tpred[pred3];
+                            
                         }    
                     }
                     else{
@@ -226,7 +517,8 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                     }
 
                 }
-                else{              
+                else
+                {              
                  
                     int pred_idx=singlePred[j];
 
@@ -256,7 +548,7 @@ bool Graph::TravelOrder(vector<int> sortNodes){
 
 
                 if (wrongpath){
-                   // cout<<"wrong path:"<<j<<endl;
+                    //cout<<"wrong path:"<<j<<endl;
                     stack<int>().swap(tempPath);
                     continue;
                 }
@@ -269,7 +561,7 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                     currPower--;
                     nextp=tempPath.top();
                     visited[nextp]=true;                    
-                    allPath.push_back(nextp);
+                    allPath.emplace_back(nextp);
                     tempPath.pop();
 
                 }
@@ -285,7 +577,7 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                         nexti=adjGroup[start][ni];
                         if (!visited[nexti]){
                             int gohomepow=currPower-1;
-                           // cout<<"gp:"<<gohomepow<<endl;
+                            //cout<<"gp:"<<gohomepow<<endl;
                             if (gohomepow >=singleSourceDist[nexti] && nexti!=bat_node)
                             {
                                // cout<<"findway"<<endl;
@@ -293,7 +585,7 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                                 visited[nexti]=true;
                                 currPower--;
                                 findway=true;
-                                allPath.push_back(nexti);
+                                allPath.emplace_back(nexti);
 
 
                                 if (nexti==bat_node){
@@ -314,6 +606,8 @@ bool Graph::TravelOrder(vector<int> sortNodes){
                 }
               
             }
+            //cout<<"tmp path:"<<endl;
+             //Print1D(allPath); 
        
     } 
 
@@ -322,12 +616,29 @@ bool Graph::TravelOrder(vector<int> sortNodes){
     return checkVisit();   
 }
 
+void Graph::InitBatAroundNode(){
+        for(int i=0;i< total_vertex; i++){
+         
+
+            Udist[i]=max_weight;
+            Upred[i]=-1;
+            Ddist[i]=max_weight;
+            Dpred[i]=-1;   
+            Rdist[i]=max_weight;
+            Rpred[i]=-1;
+            Ldist[i]=max_weight;
+            Lpred[i]=-1;
+
+
+        }
+}
+
 
 void Graph::gohome(int start){
     int pred=singlePred[start];
     while(pred!=-1){
         visited[pred]=true;
-        allPath.push_back(pred);
+        allPath.emplace_back(pred);
         pred=singlePred[pred];   
 
 
@@ -360,43 +671,72 @@ void Graph::TravelInit(){
 }
 
 
-void Graph::Print1D(vector<int> a){
+void Graph::Print1D(vector<int> &a){
     for(int i=0;i<a.size();i++)
         cout<<a[i]<<" ";
     cout<<endl;
 }
 
 void Graph::AddEdge(int start, int end, int weight){
-    total_edge++;
+    //total_edge++;
 	//adjmatrix[start][end]=weight;		
 	//adjmatrix[end][start]=weight;
 
-    adjGroup[start].push_back(end);
+    adjGroup[start].emplace_back(end);
 } 
 
-void Graph::SingleMinPath(int source){
+void Graph::SingleMinPath(int source,int Ubat, int Dbat, int Lbat, int Rbat){
     bat_node=source;
     singleSourceDist[source]=0;
+
+    BinaryHeap pq(total_vertex);
+    for(int u=0 ;u<total_vertex; u++){   
+        pq.insert(u, singleSourceDist[u]);
+    } 
+
     int newLen=0;
     int adjNode=0;
-    bool leaveEarly=true;
-    for (int k=0;k<total_vertex; k++){
-        leaveEarly=true;
-        for(int i=0;i<total_vertex;i++){
-            for (int j=0;j<adjGroup[i].size();j++){
-                adjNode=adjGroup[i][j];
-                newLen=singleSourceDist[i]+1;/*adjmatrix[i][adjNode]*/          
-                if (newLen<singleSourceDist[adjNode]){
-                    singleSourceDist[adjNode]=newLen;
-                    singlePred[adjNode]=i;
-                    leaveEarly=false;
-                }
+    int smallestNode=0;
+    while(!pq.isEmpty()){
+        smallestNode = pq.smallest();
+        for (int j=0;j<adjGroup[smallestNode].size();j++){
+            adjNode=adjGroup[smallestNode][j];
+            newLen=singleSourceDist[smallestNode]+1;/*adjmatrix[i][adjNode]*/          
+            if (newLen<singleSourceDist[adjNode]){
+                pq.decreaseKey(adjNode, newLen);
+                singleSourceDist[adjNode]=newLen;
+                singlePred[adjNode]=smallestNode;
+                
             }
         }
-        if (leaveEarly){
-            break;
-        }
+
     }
+
+
+    if (Ubat!=-1){
+        //singlePathForTravel(Ubat,Udist, Upred);        
+        up_node=Ubat;
+    }
+
+
+    if (Dbat!=-1){
+        //singlePathForTravel(Dbat,Ddist, Dpred);
+        down_node=Dbat;
+    }
+    if (Rbat!=-1){
+       // singlePathForTravel(Rbat,Rdist, Rpred);
+        right_node=Rbat;
+    }
+
+
+    if (Lbat!=-1){
+        //singlePathForTravel(Lbat,Ldist, Lpred);            
+        left_node=Lbat;
+    }
+
+
+
+
     //Print1D(singleSourceDist);
     //Print1D(singlePred);    
 }
@@ -516,7 +856,7 @@ move[RIGHT].vertical=0;
                     tempstep.row=i-1;
                     tempstep.column=j-1;
                     tempstep.sequence=nodeIdx;
-                    nodeToArray.push_back(tempstep);
+                    nodeToArray.emplace_back(tempstep);
                     nodeNumberTable[i][j]=nodeIdx;
                     nodeIdx++;
                 
@@ -524,7 +864,7 @@ move[RIGHT].vertical=0;
         }            
     }
 
-    sort(nodeToArray.begin(), nodeToArray.end(), StepSeqCompare);
+    //sort(nodeToArray.begin(), nodeToArray.end(), StepSeqCompare);
 
 
 
@@ -549,14 +889,40 @@ move[RIGHT].vertical=0;
     //cout<<"node idx:"<<nodeIdx<<endl;
 
     
-    int bat_idx;
+    int bat_idx,batUp,batDown,batRight,batleft;
     bat_idx=nodeNumberTable[start.row][start.column];
-    stepGraph.SingleMinPath(bat_idx);
+    batUp=nodeNumberTable[start.row-1][start.column];
+    batDown=nodeNumberTable[start.row+1][start.column];
+    batRight=nodeNumberTable[start.row][start.column+1];
+    batleft=nodeNumberTable[start.row][start.column-1];
+    stepGraph.SingleMinPath(bat_idx, batUp, batDown, batleft, batRight);
+
+
+/*   string OF;
+    OF.assign(argv[1]);
+    OF=OF+"/nodeNumber.map";
+    ofstream AO (OF);
+
+    if (AO.is_open()){        
+        for (int i=0; i<matrixRowCount;i++){
+            
+            for (int j=0; j<matrixColumnCount; j++){
+                AO<<nodeNumberTable[i][j]<<" ";
+            }        
+            AO<<endl;
+        }
+    }
+    else cout<<"unable to open file!";
+*/
 
 
 
 
     //cout<<"finish singlePath"<<endl;
+
+
+
+
 
 
     stepGraph.Travel();
@@ -583,10 +949,16 @@ move[RIGHT].vertical=0;
         }        
         cout<<endl;
     }    
+*/
+/*    cout<<"R dist:"<<endl;
+    for (int i=0; i<stepGraph.Dpred.size();i++){
 
+            cout<<stepGraph.Dpred[i]<<" ";
+      
+        cout<<endl;
+    }  
 
 */
-
 
     
 
